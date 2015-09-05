@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+
+    <link href="css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="css/dc.css"/>
+    <link rel="stylesheet" type="text/css" href="css/site.css"/>
+  </head>
+
+  <body>
+    <div class="container">
+
+        <h2>US Venture Capital Landscape 2011</h2>
+
+        <div id="us-chart">
+            <strong>VC Distribution by States (color: total amount raised)</strong>
+            <a class="reset" href="javascript:usChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+            <span class="reset" style="display: none;"> | Current filter: <span class="filter"></span></span>
+
+            <div class="clearfix"></div>
+        </div>
+
+        <div class="clearfix"></div>
+
+        <div id="measure-chart">
+          <strong>Score by Measure</strong>
+          <a class="reset" href="javascript:usChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+          <span class="reset" style="display: none;"> | Current filter: <span class="filter"></span></span>
+
+          <div class="clearfix"></div>
+        </div>
+
+        <div class="clearfix"></div>
+
+
+        <div id="industry-chart">
+            <strong>By Industries</strong> (y: number of deals, x: total amount raised in millions, radius: amount raised)
+            <a class="reset" href="javascript:industryChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+
+            <div class="clearfix"></div>
+        </div>
+
+        <div class="clearfix"></div>
+
+        <div id="round-chart">
+            <strong>By Rounds</strong> (y: number of deals, x: total amount raised in millions, radius: amount raised)
+            <a class="reset" href="javascript:roundChart.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+
+            <div class="clearfix"></div>
+        </div>
+
+        <div class="clearfix"></div>
+
+        <div>
+            <a href="javascript:dc.filterAll(); dc.renderAll();">Reset All</a>
+        </div>
+
+    </div>
+    <script type="text/javascript" src="js/d3.js"></script>
+    <script type="text/javascript" src="js/crossfilter.js"></script>
+    <script type="text/javascript" src="js/dc.js"></script>
+    <script>
+
+    /* jshint globalstrict: true */
+    /* global dc,d3,crossfilter,colorbrewer */
+
+    // ### Create Chart Objects
+
+    // Create chart objects associated with the container elements identified by the css selector.
+    // Note: It is often a good idea to have these objects accessible at the global scope so that they can be modified or
+    // filtered by other page controls.
+
+    // ### Anchor Div for Charts
+    /*
+    // A div anchor that can be identified by id
+        <div id='your-chart'></div>
+    // Title or anything you want to add above the chart
+        <div id='chart'><span>Days by Gain or Loss</span></div>
+    // ##### .turnOnControls()
+
+    // If a link with css class `reset` is present then the chart
+    // will automatically hide/show it based on whether there is a filter
+    // set on the chart (e.g. slice selection for pie chart and brush
+    // selection for bar chart). Enable this with `chart.turnOnControls(true)`
+        <div id='chart'>
+           <a class='reset'
+              href='javascript:myChart.filterAll();dc.redrawAll();'
+              style='display: none;'>reset</a>
+        </div>
+    // dc.js will also automatically inject the current filter value into
+    // any html element with its css class set to `filter`
+        <div id='chart'>
+            <span class='reset' style='display: none;'>
+              Current filter: <span class='filter'></span>
+            </span>
+        </div>
+    */
+
+    var numberFormat = d3.format(".2f");
+    var usChart = dc.geoChoroplethChart("#us-chart");
+    var measureChart = dc.barChart('#measure-chart');
+
+
+    var industryChart = dc.bubbleChart("#industry-chart");
+    var roundChart = dc.bubbleChart("#round-chart");
+
+    //### Load your data
+//    d3.csv("https://raw.githubusercontent.com/dc-js/dc.js/develop/web/vc/vc.csv", function (csv) {
+    d3.csv('https://data.medicare.gov/api/views/k2ze-bqvw/rows.csv?accessType=DOWNLOAD', function (csv) {
+
+      var measureNames = [];
+
+      for (var i = 0; i < csv.length; i++) {
+        if (measureNames.indexOf(csv[i]["Measure Name"]) == -1) {
+            measureNames.push(csv[i]["Measure Name"]);
+        }
+
+      }
+
+
+      var data = crossfilter(csv);
+      var states = data.dimension(function (d) {
+          return d["State"];
+      });
+      var stateScore = states.group().reduceSum(function (d) {
+          return d["Score"];
+      });
+
+      var measure = data.dimension(function (d) {
+          return d["Measure Name"];
+      });
+      var measureScore = measure.group().reduceSum(function (d) {
+          return d["Score"];
+      });
+
+
+
+
+      var industries = data.dimension(function (d) {
+          return d["Industry Group"];
+      });
+      var statsByIndustries = industries.group().reduce(
+              function (p, v) {
+                  p.amountRaised += +v["Raised"];
+                  p.deals += +v["Deals"];
+                  return p;
+              },
+              function (p, v) {
+                  p.amountRaised -= +v["Raised"];
+                  if (p.amountRaised < 0.001) p.amountRaised = 0; // do some clean up
+                  p.deals -= +v["Deals"];
+                  return p;
+              },
+              function () {
+                  return {amountRaised: 0, deals: 0}
+              }
+      );
+
+      var rounds = data.dimension(function (d) {
+          return d["RoundClassDescr"];
+      });
+      var statsByRounds = rounds.group().reduce(
+              function (p, v) {
+                  p.amountRaised += +v["Raised"];
+                  p.deals += +v["Deals"];
+                  return p;
+              },
+              function (p, v) {
+                  p.amountRaised -= +v["Raised"];
+                  if (p.amountRaised < 0.001) p.amountRaised = 0; // do some clean up
+                  p.deals -= +v["Deals"];
+                  return p;
+              },
+              function () {
+                  return {amountRaised: 0, deals: 0}
+              }
+      );
+
+      d3.json("https://raw.githubusercontent.com/dc-js/dc.js/develop/web/geo/us-states.json", function (statesJson) {
+          usChart.width(990)
+                  .height(500)
+                  .dimension(states)
+                  .group(stateScore)
+                  .colors(d3.scale.quantize().range(["#F3F9ED", "#E8F3DB", "#DD33C9", "#D3E8B7", "#C7E3A5", "#BCDD93", "#B1D781", "#A6D26F", "#9BCC5D", "#90C74C"]))
+                  .colorDomain([0, 25])
+                  .colorCalculator(function (d) { return d ? usChart.colors()(d) : '#ccc'; })
+                  .overlayGeoJson(statesJson.features, "state", function (d) {
+                      return d.properties.name;
+                  })
+                  .title(function (d) {
+                      return "State: " + d.key + "\nTotal Score: " + numberFormat(d.value ? d.value : 0);
+                  });
+
+          measureChart /* dc.barChart('#volume-month-chart', 'chartGroup') */
+                 .width(420)
+                 .height(500)
+                 .margins({top: 10, right: 50, bottom: 200, left: 40})
+                 .dimension(measure)
+                 .group(measureScore)
+                 .elasticY(true)
+                 // (_optional_) whether bar should be center to its x value. Not needed for ordinal chart, `default=false`
+                 .centerBar(true)
+                 // (_optional_) set gap between bars manually in px, `default=2`
+                 .gap(1)
+                 // (_optional_) set filter brush rounding
+                 .round(dc.round.floor)
+                 .alwaysUseRounding(true)
+                 .x(d3.scale.ordinal().domain(measureNames))
+                 .xUnits(dc.units.ordinal)
+                 .renderHorizontalGridLines(true)
+                 // Customize the filter displayed in the control span
+                 .filterPrinter(function (filters) {
+                     var filter = filters[0], s = '';
+                     s += numberFormat(filter[0]) + '% -> ' + numberFormat(filter[1]) + '%';
+                     return s;
+                 });
+
+          industryChart.width(990)
+                  .height(200)
+                  .margins({top: 10, right: 50, bottom: 30, left: 60})
+                  .dimension(industries)
+                  .group(statsByIndustries)
+                  .colors(d3.scale.category10())
+                  .keyAccessor(function (p) {
+                      return p.value.amountRaised;
+                  })
+                  .valueAccessor(function (p) {
+                      return p.value.deals;
+                  })
+                  .radiusValueAccessor(function (p) {
+                      return p.value.amountRaised;
+                  })
+                  .x(d3.scale.linear().domain([0, 5000]))
+                  .r(d3.scale.linear().domain([0, 4000]))
+                  .minRadiusWithLabel(15)
+                  .elasticY(true)
+                  .yAxisPadding(100)
+                  .elasticX(true)
+                  .xAxisPadding(200)
+                  .maxBubbleRelativeSize(0.07)
+                  .renderHorizontalGridLines(true)
+                  .renderVerticalGridLines(true)
+                  .renderLabel(true)
+                  .renderTitle(true)
+                  .title(function (p) {
+                      return p.key
+                              + "\n"
+                              + "Amount Raised: " + numberFormat(p.value.amountRaised) + "M\n"
+                              + "Number of Deals: " + numberFormat(p.value.deals);
+                  });
+          industryChart.yAxis().tickFormat(function (s) {
+              return s + " deals";
+          });
+          industryChart.xAxis().tickFormat(function (s) {
+              return s + "M";
+          });
+
+          roundChart.width(990)
+                  .height(200)
+                  .margins({top: 10, right: 50, bottom: 30, left: 60})
+                  .dimension(rounds)
+                  .group(statsByRounds)
+                  .colors(d3.scale.category10())
+                  .keyAccessor(function (p) {
+                      return p.value.amountRaised;
+                  })
+                  .valueAccessor(function (p) {
+                      return p.value.deals;
+                  })
+                  .radiusValueAccessor(function (p) {
+                      return p.value.amountRaised;
+                  })
+                  .x(d3.scale.linear().domain([0, 5000]))
+                  .r(d3.scale.linear().domain([0, 9000]))
+                  .minRadiusWithLabel(15)
+                  .elasticY(true)
+                  .yAxisPadding(150)
+                  .elasticX(true)
+                  .xAxisPadding(300)
+                  .maxBubbleRelativeSize(0.07)
+                  .renderHorizontalGridLines(true)
+                  .renderVerticalGridLines(true)
+                  .renderLabel(true)
+                  .renderTitle(true)
+                  .title(function (p) {
+                      return p.key
+                              + "\n"
+                              + "Amount Raised: " + numberFormat(p.value.amountRaised) + "M\n"
+                              + "Number of Deals: " + numberFormat(p.value.deals);
+                  });
+          roundChart.yAxis().tickFormat(function (s) {
+              return s + " deals";
+          });
+          roundChart.xAxis().tickFormat(function (s) {
+              return s + "M";
+          });
+
+          dc.renderAll();
+        });
+    });
+    </script>
+  </body>
+</html>

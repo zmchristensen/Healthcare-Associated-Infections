@@ -1,0 +1,90 @@
+---
+title: "Hospital Data Report"
+author: "Zach Christensen"
+date: "September 4, 2015"
+output: pdf_document
+---
+
+# Healthcare-Associated Infections, State 
+The Healthcare-Associated Infections (HAI) measures - state data. These measures are developed by Centers for Disease Control and Prevention (CDC) and collected through the National Healthcare Safety Network (NHSN). They provide information on infections that occur while the patient is in the hospital. These infections can be related to devices, such as central lines and urinary catheters, or spread from patient to patient after contact with an infected person or surface. Many healthcare associated infections can be prevented when the hospitals use CDC-recommended infection control steps.
+
+The metric reported is standardized infection ratios (SIRs). SIRs compare the actual number of Healthcare-Assiocated Infections at each hospital to the predicted number of infections. These ratios are adjusted for various risk factors and population traits. More information about SIRs and how they are calculated can be found here: http://www.leapfroggroup.org/media/file/SIRCalc.pdf.  .
+
+## Import Libraries and Data Set
+The analysis relies on several open source libraries, and uses data directly from the healthdata.gov API.
+```{r, importData, warning=FALSE, message=FALSE}
+# Load Required Libraries
+library(dplyr)
+library(tidyr)
+library(reshape2)
+library(ggplot2)
+
+# Load data from healthdata.gov
+states <- read.csv("http://data.medicare.gov/api/views/k2ze-bqvw/rows.csv?accessType=DOWNLOAD")
+```
+
+
+## Preprocessing and Exploration
+The dataset containes `r ncol(states)`: `r colnames(states)`. Before the analysis, the data can be restructured and some redundant information removed.
+```{r exploration, message=FALSE}
+# Date Range
+startDate <- unique(states$Measure.Start.Date)
+endDate <- unique(states$Measure.End.Date)
+
+# Split the Measure.ID column
+states <- states %>% mutate("Measure" = substring(text = Measure.ID, first = 1, last = 5),
+                            "Type" = substring(text = Measure.ID, first = 7, 
+                                               last = length(Measure.ID)))
+
+# List of different measures
+measures <- unique(filter(states, Type == "SIR")[,c("Measure", "Measure.Name")])
+
+# Then only select needed columns
+states <- subset(states, select = c("State", "Measure.Name", "Measure", "Type", "Score"))
+states <- dcast(states, State + Measure ~ Type)
+
+# Join the measures so we get measure names with data
+states <- left_join(states, measures)
+
+# Remove rows which have NA
+states <- states[-which(is.na(states$SIR)),]
+
+# Create data.frame with just SIRs by state
+sirs <- head(dcast(states, State ~ Measure, value.var = "SIR"))
+
+# Preview Data
+head(sirs[,1:5])
+```
+
+The data for this set was collected from `r startDate` to `r endDate`, with information about `r nrow(measures)` different measures collected from `r length(unique(states$State))` states or regions.The `r nrow(measures)` measures are various healthcare associated infections:
+```{r echo=FALSE}
+measures[,2]
+```
+
+## Analysis
+We can plot the SIR scores for each Measure by state.
+```{r, message=FALSE}
+# Plot of Scores by state and Measure
+qplot(State, SIR, data = states, col = Measure, main = "Plot of SIR scores by State and Measure") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + theme(legend.position="bottom")
+```
+
+Visually, it looks like the the SIR scores for `r filter(measures, Measure == "HAI_2")` are usually the highest, while `r filter(measures, Measure == "HAI_1")` are the lowest. Below the average score is grouped by measure.
+```{r, echo=FALSE}
+states %>% group_by(Measure) %>% summarise(mean(SIR))
+```
+
+The visual 
+
+
+
+```{r, correlation}
+cor(sirs[,2:7])
+
+```
+
+
+# Confidence Intervals - values that contain 1
+```{r}
+nrow(filter(states, CI_LOWER < 1, CI_UPPER > 1))
+
+```
