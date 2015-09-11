@@ -1,11 +1,11 @@
 ---
-title: "Hospital Data Report"
+title: "Healthcare-Associated Infections, State "
 author: "Zach Christensen"
 date: "September 4, 2015"
-output: pdf_document
+output: html_document
 ---
 
-# Healthcare-Associated Infections, State 
+## Executive Summary
 The Healthcare-Associated Infections (HAI) measures - state data. These measures are developed by Centers for Disease Control and Prevention (CDC) and collected through the National Healthcare Safety Network (NHSN). They provide information on infections that occur while the patient is in the hospital. These infections can be related to devices, such as central lines and urinary catheters, or spread from patient to patient after contact with an infected person or surface. Many healthcare associated infections can be prevented when the hospitals use CDC-recommended infection control steps.
 
 The metric reported is standardized infection ratios (SIRs). SIRs compare the actual number of Healthcare-Assiocated Infections at each hospital to the predicted number of infections. These ratios are adjusted for various risk factors and population traits. More information about SIRs and how they are calculated can be found here: http://www.leapfroggroup.org/media/file/SIRCalc.pdf.  .
@@ -18,19 +18,28 @@ library(dplyr)
 library(tidyr)
 library(reshape2)
 library(ggplot2)
+library(googleVis)
+op <- options(gvis.plot.tag = "chart")
+library(caret)
+library(randomForest)
+set.seed(2015)
+
+
+# Abreviations and regions for the 50 states
+stateAbrevs <- data.frame(c("IL", "IN", "IA", "KY", "MI", "MN", "MO", "OH", "WI", "CT", "DE", "ME", "MD", "MA", "NH", "NJ", "NY", "PA", "RI", "VT", "AK", "AZ", "CA", "HI", "NV", "OR", "UT", "WA","AL", "AR", "FL", "GA", "LA", "MS", "NC", "SC", "TN", "VA", "WV", "CO", "ID", "KS", "MT", "NE", "NM", "ND", "OK", "SD", "TX", "WY"))
+stateRegs <- data.frame(c("central", "central", "central", "central", "central", "central", "central", "central", "central", "northern", "northern", "northern", "northern", "northern", "northern", "northern", "northern", "northern", "northern", "northern", "pacific", "pacific", "pacific", "pacific", "pacific", "pacific", "pacific", "pacific", "southern", "southern", "southern", "southern", "southern", "southern", "southern", "southern", "southern", "southern", "southern", "western", "western", "western", "western", "western", "western", "western", "western", "western", "western", "western"))
+regions <- cbind(stateAbrevs, stateRegs)
+colnames(regions) <- c("State", "Region")
 
 # Load data from healthdata.gov
 states <- read.csv("http://data.medicare.gov/api/views/k2ze-bqvw/rows.csv?accessType=DOWNLOAD")
 ```
 
 
-## Preprocessing and Exploration
-The dataset containes `r ncol(states)`: `r colnames(states)`. Before the analysis, the data can be restructured and some redundant information removed.
-```{r exploration, message=FALSE}
-# Date Range
-startDate <- unique(states$Measure.Start.Date)
-endDate <- unique(states$Measure.End.Date)
+## Preprocessing
+The dataset contains `r ncol(states)` measurements: *`r colnames(states)`*. The data was collected from `r unique(states$Measure.Start.Date)` to `r unique(states$Measure.End.Date)`, with information about different measures collected from `r length(unique(states$State))` states or regions. 
 
+```{r exploration, message=FALSE, warning=FALSE}
 # Split the Measure.ID column
 states <- states %>% mutate("Measure" = substring(text = Measure.ID, first = 1, last = 5),
                             "Type" = substring(text = Measure.ID, first = 7, 
@@ -50,41 +59,102 @@ states <- left_join(states, measures)
 states <- states[-which(is.na(states$SIR)),]
 
 # Create data.frame with just SIRs by state
-sirs <- head(dcast(states, State ~ Measure, value.var = "SIR"))
+sirs <- dcast(states, State ~ Measure, value.var = "SIR")
 
-# Preview Data
-head(sirs[,1:5])
+# Reduce the list to only contain the 50 states
+sirs <- inner_join(sirs, regions, by = c("State" = "State"))
 ```
 
-The data for this set was collected from `r startDate` to `r endDate`, with information about `r nrow(measures)` different measures collected from `r length(unique(states$State))` states or regions.The `r nrow(measures)` measures are various healthcare associated infections:
+The `r nrow(measures)` measures tracked by the dataset are: 
 ```{r echo=FALSE}
+# Print the measures
 measures[,2]
 ```
+The data set is reduced to only contain information for the 50 states, and restructured so each row represents a state, with a column for each measurement and another for the states' region.
+```{r echo=FALSE}
+# Preview Data
+head(sirs)
+```
 
-## Analysis
-We can plot the SIR scores for each Measure by state.
+
+## Exploration
+We can plot the SIR scores for each Measure by State.
 ```{r, message=FALSE}
-# Plot of Scores by state and Measure
-qplot(State, SIR, data = states, col = Measure, main = "Plot of SIR scores by State and Measure") + theme(axis.text.x = element_text(angle = 90, hjust = 1)) + theme(legend.position="bottom")
+qplot(State, SIR, data = states, col = Measure, main = "Plot of SIR scores by State and Measure") + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1), legend.position="bottom")
 ```
 
-Visually, it looks like the the SIR scores for `r filter(measures, Measure == "HAI_2")` are usually the highest, while `r filter(measures, Measure == "HAI_1")` are the lowest. Below the average score is grouped by measure.
+Visually, it looks like the the SIR scores for `r filter(measures, Measure == "HAI_2")` are usually the highest, while `r filter(measures, Measure == "HAI_1")` are the lowest. Below is the average score and standard deviation grouped by measure, which confirms the visual observation.
 ```{r, echo=FALSE}
-states %>% group_by(Measure) %>% summarise(mean(SIR))
+states %>% group_by(Measure) %>% summarise(mean(SIR), sd(SIR))
+boxplot(states$SIR ~ Measure, data = states, main = "Boxplot of SIR Scores by Measure", col = "#90C74C")
 ```
 
-The visual 
+### Confidence Intervals
+It should be noted that this analysis only uses the SIR score, ignoring the confidence intervals also included in the data set. This is of less significance for this analysis, but care should be given if this data were being analyzed to evaluate or predict the effectiveness of regulations or procedures on SIR scores. There are `r nrow(filter(states, CI_LOWER < 1, CI_UPPER > 1))` measurements which contain 1 in the confidence interval; this means that while the SIR score may be above or below 1, careful consideration should be given before concluding that the measurement respresents a significant improvement or worsening from the expected incident rate. 
 
 
+## Regional Analysis
+To incorporate some machine learning and predictive algorithms, it would be interesting to see if we can predict which region in the United States is in based on its SIR scores for each measure. Below are GeoPlots for each of the measures, *HAI_1* through *HAI_6*.
 
+#### GeoPlots of SIR Scores
+```{r, results='asis', echo=FALSE}
+geo_1 <- gvisGeoChart(data = sirs, colorvar = "HAI_1",
+                  options=list(region="US", displayMode="regions",
+                               resolution="provinces", width=400, height=300))
+geo_2 <- gvisGeoChart(data = sirs, colorvar = "HAI_2",
+                  options=list(region="US", displayMode="regions",
+                               resolution="provinces", width=400, height=300))
+geo_3 <- gvisGeoChart(data = sirs, colorvar = "HAI_3",
+                  options=list(region="US", displayMode="regions",
+                               resolution="provinces", width=400, height=300))
+geo_4 <- gvisGeoChart(data = sirs, colorvar = "HAI_4",
+                  options=list(region="US", displayMode="regions",
+                               resolution="provinces", width=400, height=300))
+geo_5 <- gvisGeoChart(data = sirs, colorvar = "HAI_5",
+                  options=list(region="US", displayMode="regions",
+                               resolution="provinces", width=400, height=300))
+geo_6 <- gvisGeoChart(data = sirs, colorvar = "HAI_6",
+                  options=list(region="US", displayMode="regions",
+                               resolution="provinces", width=400, height=300))
+
+print(gvisMerge(geo_1, geo_2, horizontal = TRUE), "chart")
+print(gvisMerge(geo_3, geo_4, horizontal = TRUE), "chart")
+print(gvisMerge(geo_5, geo_6, horizontal = TRUE), "chart")
+```
+
+While the maps look pretty distinct, the correlation between variables can be explicitly calcualted.
 ```{r, correlation}
+# Compute and Print Correlations
 cor(sirs[,2:7])
-
 ```
 
+As shown, the variables are not correlated, so all of them can be used to develop a predictive model. Predicting which region a state is in is a classification problem, so a `random forest` will be generated. A `random forest` is essentially a collection of `decision trees` that will predict the Region based on the values for the 6 HAI measurements.
 
-# Confidence Intervals - values that contain 1
-```{r}
-nrow(filter(states, CI_LOWER < 1, CI_UPPER > 1))
+```{r, regions}
+# Create training and test set
+inTrain <- createDataPartition(sirs$Region, p = 0.75, list = FALSE)
+train <- sirs[inTrain,]
+test <- sirs[-inTrain,]
 
+# Create a random forest model from the train dataset
+# Attempt to predict Region based on the 6 Healthcare-Associated Infections
+# Using a trainControl to use cross-validation 4 times
+rfModel <- train(Region ~ HAI_1 + HAI_2 + HAI_3 + HAI_4 + HAI_5 + HAI_6, train, method = "rf", trControl=trainControl(method = "cv", number = 4))
+
+# Use the model to predict the Region for the test set
+rfPredict <- predict(rfModel$finalModel, test, type = "class")
+
+# Compare the predictions to the actual regions
+rfMatrix <- confusionMatrix(rfPredict, test$Region)
 ```
+
+The `predict` method takes the generate model and predicts the Regions for the samples in the test set. `confusionMatrix` then compares the predicted results with the actual results, and computes several statistics about the model. The output of this method contains information used to evaluate the model.
+
+```{r, confusion}
+# Print confusion matrix
+rfMatrix
+```
+
+The 'simpliest' measure of an algorithm's success is it's accuracy or error rate (1 - accuracy). The accuracy for the above model is `r rfMatrix$overall[[1]]`, giving an error rate of `r 1 - rfMatrix$overall[[1]]`. Obviously, this error rate is pretty high, which isn't too surprising. The rates of Healthcare-Associated Infections is likely dependent on more complicated variables than a state's Region, such as the financial resources dedicated to reducing the rate, or the health and demographics of the state. 
+

@@ -1,4 +1,28 @@
+.content {
+  width: 1200px;
+  margin: 0 auto;
+}
+
+#reset {
+  margin-top: 15px;
+}
+
+#charts {
+  margin-top: 20px;
+}
+
+#data-table {
+  margin-top: 20px;
+}
+
+#measure-chart {
+  min-height: 500px;
+}
+
 #measure-chart .x.axis text {
     text-anchor: end !important;
-    transform: rotate(-45deg);
+}
+
+#us-chart {
+  min-height: 500px;
 }
