@@ -17,6 +17,7 @@
 
 #measure-chart {
   min-height: 500px;
+  padding-top: 100px;
 }
 
 #measure-chart .x.axis text {
