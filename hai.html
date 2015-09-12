@@ -7,7 +7,7 @@
     <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css">
     <!-- <link href="css/bootstrap.min.css" rel="stylesheet">  -->
 
-    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/dc/2.0.0-beta.18/dc.min.css"/>
+    <link rel="stylesheet" type="text/css" href="https://cdnjs.cloudflare.com/ajax/libs/dc/2.0.0-beta.18/dc.css"/>
     <!-- <link rel="stylesheet" type="text/css" href="css/dc.css"/> -->
 
     <style>
@@ -53,15 +53,15 @@
         padding-top: 50px;
       }
 
-      #measure-chart.dc-chart .axis.y,
-      #measure-chart.dc-chart .axis.x {
+      .dc-chart .axis.y,
+      .dc-chart .axis.x {
         fill: white;
       }
 
-      #measure-chart.dc-chart .axis.y .tick line,
-      #measure-chart.dc-chart .axis.x .tick line,
-      #measure-chart.dc-chart .axis.y path,
-      #measure-chart.dc-chart .axis.x path {
+      .dc-chart .axis.y .tick line,
+      .dc-chart .axis.x .tick line,
+      .dc-chart .axis.y path,
+      .dc-chart .axis.x path {
         stroke: white;
       }
 
@@ -164,13 +164,12 @@
     var usChart = dc.geoChoroplethChart("#us-chart");
     var measureChart = dc.barChart('#measure-chart');
     var datatable = dc.dataTable("#data-table");
-    var scatterChart = dc.scatterPlot("#scatter");
+    var scatterChart = dc.barChart("#scatter");
 
 
     //### Load your data
     d3.csv('https://data.medicare.gov/api/views/k2ze-bqvw/rows.csv?accessType=DOWNLOAD', function (csv) {
 
-      console.log(csv[0]);
       /*
         Catheter-Associated Urinary Tract Infections (CAUTI)
         Clostridium difficile (C.diff.) Laboratory-identified Events (Intestinal infections)
@@ -206,7 +205,6 @@
         }
       }
 
-
       var data = crossfilter(newCSV);
       var states = data.dimension(function (d) {
           return d["State"];
@@ -222,15 +220,63 @@
           return d["Score"];
       });
 
+      var scatterDimension = data.dimension(function(d) {
+        return [d["State"], d["Measure ID"]];
+      });
+      var scatterGroup = scatterDimension.group().reduceSum(function(d) { return d["Score"]; });
+
+      var oneScore = states.group().reduceSum(function(d) { return d["Measure ID"] == "HAI_1" ? d["Score"] : 0 });
+      var twoScore = states.group().reduceSum(function(d) { return d["Measure ID"] == "HAI_2" ? d["Score"] : 0 });
+      var threeScore = states.group().reduceSum(function(d) { return d["Measure ID"] == "HAI_3" ? d["Score"] : 0 });
+      var fourScore = states.group().reduceSum(function(d) { return d["Measure ID"] == "HAI_4" ? d["Score"] : 0 });
+      var fiveScore = states.group().reduceSum(function(d) { return d["Measure ID"] == "HAI_5" ? d["Score"] : 0 });
+      var sixScore = states.group().reduceSum(function(d) { return d["Measure ID"] == "HAI_6" ? d["Score"] : 0 });
+
       var maxScore = Math.ceil(stateScore.top(1)[0].value);
+
+      var colorRenderlet = function (_chart) {
+
+         function setStyle(selection, keyName) {
+             selection.style("fill", function (d) {
+                 if (d[keyName] == "HAI_1")
+                      return "#00796B";
+                 else if (d[keyName] == "HAI_2")
+                     return "#238D81";
+                 else if (d[keyName] == "HAI_3")
+                     return "#47A197";
+                 else if (d[keyName] == "HAI_4")
+                     return "#6AB6AE";
+                 else if (d[keyName] == "HAI_5")
+                     return "#8ECAC4";
+                 else if (d[keyName] == "HAI_6")
+                     return "#B2DFDB";
+
+             });
+         }
+         // set the fill attribute for the bars
+         setStyle(_chart
+                 .selectAll("g.stack")
+                 .selectAll("rect.bar")
+             , "layer"
+         );
+         // set the fill attribute for the legend
+         setStyle(_chart
+                 .selectAll("g.dc-legend-item")
+                 .selectAll("rect")
+             , "name"
+         );
+     };
 
       d3.json("https://raw.githubusercontent.com/dc-js/dc.js/develop/web/geo/us-states.json", function (statesJson) {
           usChart.width(900)
-                  .height(500)
-                  .dimension(states)
-                  .group(stateScore)
+                 .height(500)
+                 .dimension(states)
+                 .group(stateScore)
 //                  .colors(d3.scale.quantize().range(["#F3F9ED", "#D3E8B7", "#C7E3A5", "#A6D26F", "#90C74C", "#1BC98E"]))
-                  .colors(d3.scale.quantize().range(["#28ffd0", "#24ffbd", "#21f3ac", "#1edd9c", "#1BC98E", "#18b580", "#16a373", "#149368"]))
+//                  .colors(d3.scale.quantize().range(["#24ffbd", "#21f3ac", "#1edd9c", "#1BC98E", "#18b580", "#16a373"]))
+//                  .colors(d3.scale.quantize().range(["#24ffbd", "#1FEBA6", "#1EE3A0", "#1DDB9A", "#1CD395",  "#1BCB8F", "#1AC389", "#19BB84", "#18B37E", "#17AB78", "#16a373"]))
+                  .colors(d3.scale.quantize().range(["#24ffbd", "#1EE3A0", "#1CD395", "#1AC389", "#18B37E", "#16a373"]))
+//                  .colors(d3.scale.quantize().range(["#61D6AE", "#5ACEA7", "#54C7A0", "#4EBF99", "#47B892",  "#41B18B", "#3BA984", "#34A27D", "#2E9A76", "#28936F", "#228C68"]))
                   .colorDomain([0, maxScore])
                   .colorCalculator(function (d) { return d ? usChart.colors()(d) : '#ccc'; })
                   .overlayGeoJson(statesJson.features, "state", function (d) {
@@ -261,18 +307,43 @@
                       .attr('transform', "rotate(-90)");
                 });
 
-          //scatter
-          scatterChart.width(500)
-              .height(200)
-              .x(d3.scale.ordinal().domain(stateNames))
-              .elasticX(true)
+        scatterChart
+              .width(1200)
+              .height(400)
+              .margins({top: 10, right: 10, bottom: 50, left: 40})
               .dimension(states)
-              .group(stateScore);
-
+              .group(oneScore, "HAI_1").valueAccessor(function (d) {
+                  return d.value;
+              })
+              .stack(twoScore, "HAI_2", function (d) {
+                  return d.value;
+              })
+              .stack(threeScore, "HAI_3", function (d) {
+                  return d.value;
+              })
+              .stack(fourScore, "HAI_4", function (d) {
+                  return d.value;
+              })
+              .stack(fiveScore, "HAI_5", function (d) {
+                  return d.value;
+              })
+              .stack(sixScore, "HAI_6", function (d) {
+                  return d.value;
+              })
+              .elasticY(true)
+              .colors(["#1ca8dd"])
+              .gap(10)
+              .round(dc.round.floor)
+              .x(d3.scale.ordinal().domain(stateNames))
+              .xUnits(dc.units.ordinal)
+              .renderHorizontalGridLines(true)
+              // Customize the filter displayed in the control span
+              .renderlet(colorRenderlet);
 
           //data table
           datatable
             .dimension(states)
+            .size([56])
             .group(function(d) {return d.State;})
             .columns([
                 function(d) {return "";},
