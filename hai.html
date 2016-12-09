@@ -35,8 +35,8 @@
         margin-right: 15px;
       }
 
-      #charts {
-        margin-top: 20px;
+      .charts {
+        margin-top: 30px;
       }
 
       #data-table {
@@ -95,15 +95,14 @@
 
       <div class="row text-center">
         <div class="col-md-8">
-          <strong>Total SIR Score</strong>
+          <strong>Total SIR Scores </strong>
         </div>
         <div class="col-md-4>">
           <strong>SIR Score by Measure</strong>
         </div>
       </div>
 
-
-      <div id="charts" class="row">
+      <div class="row charts">
         <div class="col-md-8>">
           <div id="us-chart">
             <div class="reset-holder pull-left">
@@ -124,9 +123,13 @@
         </div>
       </div>
 
-      <div class="row">
+      <div class="row charts">
         <div class="col-md-12">
-          <div id="scatter">
+          <div id="stackedBar">
+            <div class="reset-holder pull-right">
+              <a class="reset label label-default" href="javascript:stackedBar.filterAll();dc.redrawAll();" style="display: none;">reset</a>
+              <span class="reset" style="display: none;"> | Current filter: <span class="filter"></span></span>
+            </div>
           </div>
         </div>
       </div>
@@ -152,7 +155,6 @@
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/crossfilter/1.3.12/crossfilter.min.js"></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/dc/2.0.0-beta.18/dc.min.js"></script>
 
-
     <!--
       <script type="text/javascript" src="js/d3.js"></script>
       <script type="text/javascript" src="js/crossfilter.js"></script>
@@ -164,7 +166,7 @@
     var usChart = dc.geoChoroplethChart("#us-chart");
     var measureChart = dc.barChart('#measure-chart');
     var datatable = dc.dataTable("#data-table");
-    var scatterChart = dc.barChart("#scatter");
+    var stackedBar = dc.barChart("#stackedBar");
 
 
     //### Load your data
@@ -204,6 +206,7 @@
           }
         }
       }
+      measureIds.sort();
 
       var data = crossfilter(newCSV);
       var states = data.dimension(function (d) {
@@ -220,11 +223,6 @@
           return d["Score"];
       });
 
-      var scatterDimension = data.dimension(function(d) {
-        return [d["State"], d["Measure ID"]];
-      });
-      var scatterGroup = scatterDimension.group().reduceSum(function(d) { return d["Score"]; });
-
       var oneScore = states.group().reduceSum(function(d) { return d["Measure ID"] == "HAI_1" ? d["Score"] : 0 });
       var twoScore = states.group().reduceSum(function(d) { return d["Measure ID"] == "HAI_2" ? d["Score"] : 0 });
       var threeScore = states.group().reduceSum(function(d) { return d["Measure ID"] == "HAI_3" ? d["Score"] : 0 });
@@ -238,19 +236,18 @@
 
          function setStyle(selection, keyName) {
              selection.style("fill", function (d) {
-                 if (d[keyName] == "HAI_1")
-                      return "#00796B";
-                 else if (d[keyName] == "HAI_2")
-                     return "#238D81";
-                 else if (d[keyName] == "HAI_3")
-                     return "#47A197";
-                 else if (d[keyName] == "HAI_4")
-                     return "#6AB6AE";
+                 if (d[keyName] == "HAI_6")
+                      return "#B2EBF2";
                  else if (d[keyName] == "HAI_5")
-                     return "#8ECAC4";
-                 else if (d[keyName] == "HAI_6")
-                     return "#B2DFDB";
-
+                     return "#8EDAE3";
+                 else if (d[keyName] == "HAI_4")
+                     return "#6AC9D4";
+                 else if (d[keyName] == "HAI_3")
+                     return "#47B8C5";
+                 else if (d[keyName] == "HAI_2")
+                     return "#23A7B6";
+                 else if (d[keyName] == "HAI_1")
+                     return "#0097A7";
              });
          }
          // set the fill attribute for the bars
@@ -272,11 +269,7 @@
                  .height(500)
                  .dimension(states)
                  .group(stateScore)
-//                  .colors(d3.scale.quantize().range(["#F3F9ED", "#D3E8B7", "#C7E3A5", "#A6D26F", "#90C74C", "#1BC98E"]))
-//                  .colors(d3.scale.quantize().range(["#24ffbd", "#21f3ac", "#1edd9c", "#1BC98E", "#18b580", "#16a373"]))
-//                  .colors(d3.scale.quantize().range(["#24ffbd", "#1FEBA6", "#1EE3A0", "#1DDB9A", "#1CD395",  "#1BCB8F", "#1AC389", "#19BB84", "#18B37E", "#17AB78", "#16a373"]))
                   .colors(d3.scale.quantize().range(["#24ffbd", "#1EE3A0", "#1CD395", "#1AC389", "#18B37E", "#16a373"]))
-//                  .colors(d3.scale.quantize().range(["#61D6AE", "#5ACEA7", "#54C7A0", "#4EBF99", "#47B892",  "#41B18B", "#3BA984", "#34A27D", "#2E9A76", "#28936F", "#228C68"]))
                   .colorDomain([0, maxScore])
                   .colorCalculator(function (d) { return d ? usChart.colors()(d) : '#ccc'; })
                   .overlayGeoJson(statesJson.features, "state", function (d) {
@@ -293,52 +286,112 @@
                  .dimension(measure)
                  .group(measureScore)
                  .elasticY(true)
-                 .colors(["#1ca8dd"])
                  .gap(10)
                  .round(dc.round.floor)
                  .x(d3.scale.ordinal().domain(measureIds))
                  .xUnits(dc.units.ordinal)
+                 .colors(d3.scale.ordinal().domain(measureIds)
+                                           .range([ "#0097A7", "#23A7B6", "#47B8C5", "#6AC9D4", "#8EDAE3", "#B2EBF2"]))
+                 .colorAccessor(function(d) {
+                    return d.key;
+                 })
                  .renderHorizontalGridLines(true)
-                 // Customize the filter displayed in the control span
                  .renderlet(function (chart) {
                     chart.selectAll("g.x text")
                       .attr('dx', '-10')
                       .attr('dy', '-5')
                       .attr('transform', "rotate(-90)");
-                });
+                 });
 
-        scatterChart
+        stackedBar
               .width(1200)
               .height(400)
               .margins({top: 10, right: 10, bottom: 50, left: 40})
               .dimension(states)
+              .elasticX(true)
               .group(oneScore, "HAI_1").valueAccessor(function (d) {
+                if (usChart.filters().length == 0) {
                   return d.value;
+                } else {
+                  if (usChart.filters().indexOf(d.key) != -1) {
+                    return d.value;
+                  } else {
+                    return 0;
+                  }
+                }
               })
               .stack(twoScore, "HAI_2", function (d) {
-                  return d.value;
+                  if (usChart.filters().length == 0) {
+                    return d.value;
+                  } else {
+                    if (usChart.filters().indexOf(d.key) != -1) {
+                      return d.value;
+                    } else {
+                      return 0;
+                    }
+                  }
               })
               .stack(threeScore, "HAI_3", function (d) {
+                if (usChart.filters().length == 0) {
                   return d.value;
+                } else {
+                  if (usChart.filters().indexOf(d.key) != -1) {
+                    return d.value;
+                  } else {
+                    return 0;
+                  }
+                }
               })
               .stack(fourScore, "HAI_4", function (d) {
+                if (usChart.filters().length == 0) {
                   return d.value;
+                } else {
+                  if (usChart.filters().indexOf(d.key) != -1) {
+                    return d.value;
+                  } else {
+                    return 0;
+                  }
+                }
               })
               .stack(fiveScore, "HAI_5", function (d) {
+                if (usChart.filters().length == 0) {
                   return d.value;
+                } else {
+                  if (usChart.filters().indexOf(d.key) != -1) {
+                    return d.value;
+                  } else {
+                    return 0;
+                  }
+                }
               })
               .stack(sixScore, "HAI_6", function (d) {
+                if (usChart.filters().length == 0) {
                   return d.value;
+                } else {
+                  if (usChart.filters().indexOf(d.key) != -1) {
+                    return d.value;
+                  } else {
+                    return 0;
+                  }
+                }
               })
               .elasticY(true)
-              .colors(["#1ca8dd"])
+              .colors(["#FFFFFF"])
               .gap(10)
               .round(dc.round.floor)
               .x(d3.scale.ordinal().domain(stateNames))
               .xUnits(dc.units.ordinal)
               .renderHorizontalGridLines(true)
-              // Customize the filter displayed in the control span
-              .renderlet(colorRenderlet);
+              .renderlet(colorRenderlet)
+              .title(function (d) {
+                  return "State: " + d.key + "\n Score: " + numberFormat(d.value ? d.value : 0);
+              })
+              .on("filtered", function(chart, filter) {
+                  console.log(chart);
+                  console.log(filter);
+                  usChart.filter(filter);
+              });
+
 
           //data table
           datatable
